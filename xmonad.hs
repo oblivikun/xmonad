@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
-import           Control.Monad                       (unless, when)
+import           Control.Monad                       (unless, when, void)
 import           Data.Bits                           (testBit)
 import           Data.Foldable                       (find)
 import qualified Data.Map                            as M
@@ -62,8 +62,10 @@ import           XMonad.Util.Loggers                 (logLayoutOnScreen,
                                                       shortenL, wrapL,
                                                       xmobarColorL)
 import           XMonad.Util.NamedScratchpad
-
-
+import Data.Time
+import Data.Time.LocalTime
+import Control.Concurrent (forkIO, threadDelay) -- Add this line
+import Control.Monad (forever) -- Add this line
 myTerminal, myTerminalClass :: [Char]
 myTerminal = "termonad"
 myTerminalClass = "termonad"
@@ -130,10 +132,14 @@ myAditionalKeys =
             , ("<XF86AudioLowerVolume>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh --dec")
             , ("<XF86AudioMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh --toggle")
             , ("<XF86AudioMicMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh  --toggle-mic")
-  , ("M-S-e", spawn "sh /home/erel/.config/hypr/scripts/RofiEmoji.sh")
+--bright
+
+  , ("<XF86MonBrightnessUp>", spawn "lux -a 10%")
+  , ("<XF86MonBrightnessDown>", spawn "lux -s 10%") 
+
   , ("M-v", spawn $ myTerminal ++ " --title Nvim -e nvim")
   , ("M-f", spawn $ myTerminal ++ " --title Ranger -e ranger")
-  , ("M-d", spawn "sh ~/.config/rofi/launchers/type-6/launcher.sh")
+  , ("M-d", spawn "pkill rofi || rofi -show drun -modi drun,filebrowser,run,window")
   , ("M-S-d", spawn "rofi -show run")
   , ("M-p", spawn "passmenu -p pass")
   , ("M-w", spawn "librewolf")
@@ -227,6 +233,15 @@ switchScreen d = do s <- screenBy d
                          Just ws -> windows (W.view ws)
 
 ------------------------------------------------------------------------
+isDayTime :: IO Bool
+isDayTime = do
+ currentZonedTime <- getZonedTime
+ let currentHour = localTimeOfDay $ zonedTimeToLocalTime currentZonedTime
+ return $ not (isNight currentHour)
+
+isNight :: TimeOfDay -> Bool
+isNight time = time >= TimeOfDay 20 0 0 || time < TimeOfDay 9 0 0
+
 
 mySpacing :: Integer -> Integer -> l a -> ModifiedLayout Spacing l a
 mySpacing i j = spacingRaw False (Border i i i i) True (Border j j j j) True
@@ -279,6 +294,20 @@ myHandleEventHook = multiScreenFocusHook
                 --  <+> dynamicPropertyChange "WM_NAME" (title =? "Spotify" --> doShift "1_8")
 
 ------------------------------------------------------------------------
+restartXMonad :: IO ()
+restartXMonad = spawn "xmonad --restart"
+periodicTasks :: X ()
+periodicTasks = do
+ liftIO $ void $ forkIO $ forever $ do
+    changeWallpaper
+    threadDelay (60 * 60 * 1000000) -- Wait for 1 hour
+    restartXMonad
+changeWallpaper :: IO ()
+changeWallpaper = do
+ isDay <- isDayTime
+ if isDay
+    then spawn "feh --bg-tile ~/Pictures/day_wall.jpg"
+    else spawn "feh --bg-tile ~/Pictures/night_wall.jpg"
 
 myStartupHook :: X ()
 myStartupHook = do
@@ -287,7 +316,8 @@ myStartupHook = do
     spawn "xsetroot -cursor_name left_ptr &"
     spawn "setxkbmap us"
     spawn "lxsession &"
-    spawn "feh --bg-tile ~/Pictures/gruvli.png"
+    liftIO changeWallpaper
+    periodicTasks
     modify $ \xstate -> xstate { windowset = onlyOnScreen 1 "1_1" (windowset xstate) }
 
 ------------------------------------------------------------------------
@@ -345,34 +375,39 @@ myWorkspaceIndices = M.fromList $ zip myWorkspaces [1..]
 clickable :: [Char] -> [Char] -> [Char]
 clickable icon ws = addActions [ (show i, 1), ("q", 2), ("Left", 4), ("Right", 5) ] icon
                     where i = fromJust $ M.lookup ws myWorkspaceIndices
-
-myStatusBarSpawner :: Applicative f => ScreenId -> f StatusBarConfig
+getColorScheme :: Bool -> (String, String, String)
+getColorScheme isDayTime =
+ if isDayTime
+    then ("#FFFFFF", "#D3D3D3", "#FFA500") -- Light mode: grey2, grey4, orange
+    else ("#000000", "#808080", "#FF4500") -- Dark mode: grey2, grey4, orange
+myStatusBarSpawner :: ScreenId -> IO StatusBarConfig
 myStatusBarSpawner (S s) = do
-                    pure $ statusBarPropTo ("_XMONAD_LOG_" ++ show s)
-                          ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ show s ++ ".hs")
-                          (pure $ myXmobarPP (S s))
+    colorScheme <- getColorScheme <$> isDayTime
+    let statusBarConfig = statusBarPropTo ("_XMONAD_LOG_" ++ show s)
+                                          ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ show s ++ ".hs")
+                                          (return $ myXmobarPP (S s) colorScheme)
+    return statusBarConfig
 
-
-myXmobarPP :: ScreenId -> PP
-myXmobarPP s  = filterOutWsPP [scratchpadWorkspaceTag] . marshallPP s $ def
-  { ppSep = ""
-  , ppWsSep = ""
-  , ppCurrent = xmobarColor orange ""
-  , ppVisible = xmobarColor orange ""
-  , ppVisibleNoWindows = Just (xmobarColor grey4 "")
-  , ppHidden = xmobarColor grey2 ""
-  , ppHiddenNoWindows = xmobarColor grey2 ""
-  , ppUrgent = xmobarColor orange ""
-  , ppOrder = \(ws : _ : _ : extras) -> ws : extras
-  , ppExtras  = [ wrapL (actionPrefix ++ "n" ++ actionButton ++ "1>") actionSuffix
+myXmobarPP :: ScreenId -> (String, String, String) -> PP
+myXmobarPP s (grey2, grey4, orange) = filterOutWsPP [scratchpadWorkspaceTag] . marshallPP s $ def
+ { ppSep = ""
+ , ppWsSep = ""
+ , ppCurrent = xmobarColor orange ""
+ , ppVisible = xmobarColor orange ""
+ , ppVisibleNoWindows = Just (xmobarColor grey4 "")
+ , ppHidden = xmobarColor grey2 ""
+ , ppHiddenNoWindows = xmobarColor grey2 ""
+ , ppUrgent = xmobarColor orange ""
+ , ppOrder = \(ws : _ : _ : extras) -> ws : extras
+ , ppExtras = [ wrapL (actionPrefix ++ "n" ++ actionButton ++ "1>") actionSuffix
                 $ wrapL (actionPrefix ++ "q" ++ actionButton ++ "2>") actionSuffix
                 $ wrapL (actionPrefix ++ "Left" ++ actionButton ++ "4>") actionSuffix
                 $ wrapL (actionPrefix ++ "Right" ++ actionButton ++ "5>") actionSuffix
                 $ wrapL "    " "    " $ layoutColorIsActive s (logLayoutOnScreen s)
                 , wrapL (actionPrefix ++ "q" ++ actionButton ++ "2>") actionSuffix
-                $  titleColorIsActive s (shortenL 95 $ logTitleOnScreen s)
+                $ titleColorIsActive s (shortenL 95 $ logTitleOnScreen s)
                 ]
-  }
+ }
   where
     titleColorIsActive n l = do
       c <- withWindowSet $ return . W.screen . W.current
