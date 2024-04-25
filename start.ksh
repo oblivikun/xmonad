@@ -46,6 +46,3 @@ pulseaudio -D
 stty sane & 
 xbindkeys &
 echo "done"
-echo "starting emacs daemon"
-emacs --daemon
-# xbindkeys

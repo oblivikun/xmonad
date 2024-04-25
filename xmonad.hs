@@ -22,7 +22,7 @@ import           XMonad.Hooks.InsertPosition         (Focus (Newer),
 import           XMonad.Hooks.ManageDocks
 import           XMonad.Hooks.ManageHelpers          (doCenterFloat, doSink,
                                                       isDialog)
-import           XMonad.Hooks.OnPropertyChange
+-- import           XMonad.Hooks.OnPropertyChange
 import           XMonad.Hooks.RefocusLast            (isFloat)
 import           XMonad.Hooks.StatusBar
 import           XMonad.Hooks.WindowSwallowing
@@ -79,7 +79,7 @@ cyan   = "#8BABF0"
 orange = "#C45500"
 
 myWorkspaces :: [[Char]]
-myWorkspaces = ["  \58930  ", "\59056  ", "\60362  ", "\62600  ", "\58931  ", "\62221  ", "\989728  ", "\61723  ", "\62065  "]
+myWorkspaces = ["  1  ", "2  ", "3  ", "4  ", "5  ", "6  ", "7  ", "8  ", "9  "]
 
 
 trayerRestartCommand :: [Char]
@@ -128,9 +128,9 @@ myAditionalKeys =
    --volume
     -- apps
   [ ("M-<Return>", spawn myTerminal)
-  ,  ("<XF86AudioRaiseVolume>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh --inc")
-            , ("<XF86AudioLowerVolume>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh --dec")
-            , ("<XF86AudioMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh --toggle")
+  ,  ("<XF86AudioRaiseVolume>", spawn "pamixer --increase 5")
+            , ("<XF86AudioLowerVolume>", spawn "pamixer --decrease 5")
+            , ("<XF86AudioMute>", spawn "pamixer --toggle-mute")
             , ("<XF86AudioMicMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh  --toggle-mic")
 --bright
 
@@ -139,8 +139,7 @@ myAditionalKeys =
 
   , ("M-v", spawn $ myTerminal ++ " --title Nvim -e nvim")
   , ("M-f", spawn $ myTerminal ++ " --title Ranger -e ranger")
-  , ("M-d", spawn "pkill rofi || rofi -show drun -modi drun,filebrowser,run,window")
-  , ("M-S-d", spawn "rofi -show run")
+  , ("M-d", spawn "rofi -show drun windowcd")
   , ("M-p", spawn "passmenu -p pass")
   , ("M-w", spawn "librewolf")
   , ("M-S-w", spawn "librewolf --private-window")
@@ -182,7 +181,7 @@ myAditionalKeys =
  , ("M-<comma>", sendMessage $ IncMasterN  1)
  , ("M-<period>", sendMessage $ IncMasterN (-1))
  , ("M-<Space>", withFocused $ windows . W.sink)
-
+  
 
   -- layout controls
   , ("M-a", sendMessage $ Toggle NBFULL)
@@ -295,19 +294,19 @@ myHandleEventHook = multiScreenFocusHook
 
 ------------------------------------------------------------------------
 restartXMonad :: IO ()
-restartXMonad = spawn "xmonad --restart"
+restartXMonad = spawn "killall xmobar && xmonad --restart"
 periodicTasks :: X ()
 periodicTasks = do
  liftIO $ void $ forkIO $ forever $ do
     changeWallpaper
-    threadDelay (60 * 60 * 1000000) -- Wait for 1 hour
+    threadDelay (10 * 10 * 1000000) -- Wait for 1 hour
     restartXMonad
 changeWallpaper :: IO ()
 changeWallpaper = do
  isDay <- isDayTime
  if isDay
-    then spawn "feh --bg-tile ~/Pictures/day_wall.jpg"
-    else spawn "feh --bg-tile ~/Pictures/night_wall.jpg"
+    then spawn "feh --bg-scale ~/Pictures/day_wall.jpg"
+    else spawn "feh --bg-scale ~/Pictures/night.webp"
 
 myStartupHook :: X ()
 myStartupHook = do
@@ -378,16 +377,16 @@ clickable icon ws = addActions [ (show i, 1), ("q", 2), ("Left", 4), ("Right", 5
 getColorScheme :: Bool -> (String, String, String)
 getColorScheme isDayTime =
  if isDayTime
-    then ("#FFFFFF", "#D3D3D3", "#FFA500") -- Light mode: grey2, grey4, orange
-    else ("#000000", "#808080", "#FF4500") -- Dark mode: grey2, grey4, orange
+ then ("#000000", "#808080", "#FF4500") -- Dark mode: grey2, grey4, orange
+    else ("#FFFFFF", "#D3D3D3", "#FFA500") -- Light mode: grey2, grey4, orange
 myStatusBarSpawner :: ScreenId -> IO StatusBarConfig
 myStatusBarSpawner (S s) = do
-    colorScheme <- getColorScheme <$> isDayTime
-    let statusBarConfig = statusBarPropTo ("_XMONAD_LOG_" ++ show s)
-                                          ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ show s ++ ".hs")
-                                          (return $ myXmobarPP (S s) colorScheme)
-    return statusBarConfig
-
+ isDay <- isDayTime
+ colorScheme <- return $ getColorScheme isDay
+ let statusBarConfig = statusBarPropTo ("_XMONAD_LOG_" ++ show s)
+                                        ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ (if isDay then "0" else "1") ++ ".hs")
+                                        (return $ myXmobarPP (S s) colorScheme)
+ return statusBarConfig
 myXmobarPP :: ScreenId -> (String, String, String) -> PP
 myXmobarPP s (grey2, grey4, orange) = filterOutWsPP [scratchpadWorkspaceTag] . marshallPP s $ def
  { ppSep = ""

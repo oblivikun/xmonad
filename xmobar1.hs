@@ -17,7 +17,7 @@ Config { font = "Roboto Bold 10"
        , hideOnStart = False
        , iconRoot = "/home/erel/.xmonad/icons/"
        , commands =
-         [ Run UnsafeXPropertyLog "_XMONAD_LOG_1"
+         [ Run UnsafeXPropertyLog "_XMONAD_LOG_0"
          , Run Date "%a, %d %b   <fn=5>󰥔</fn>     %H:%M:%S" "date" 10
          , Run Memory ["-t","Mem: <fc=#AAC0F0><usedratio></fc>%"] 10
          , Run Com "/home/erel/.xmonad/cpu_temp.sh" [] "cpu" 10
@@ -28,7 +28,7 @@ Config { font = "Roboto Bold 10"
        , sepChar = "%"
        , alignSep = "}{"
        , template = "\
-            \    \
+            \ %_XMONAD_LOG_0%   \
             \}\
             \<action=xdotool key super+r>%date%</action>\
             \{\
