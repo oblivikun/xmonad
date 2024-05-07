@@ -3,9 +3,9 @@ Config {
        font = "xft:Zekton:size=12:bold:antialias=true"
        , additionalFonts = [ "xft:Fira Code Nerd Font:size=15" ]
        , allDesktops = True
-       , bgColor = "#000000"
+       , bgColor = "#FFFFFF"
        , fgColor = "#000000"
-       , alpha = 30
+       , alpha = 120
        , position = TopSize L 100 40
        , commands = [ Run Cpu [ "--template", "<fc=#a9a1e1><fn=1></fn></fc> <total>%"
                               , "--Low","3"

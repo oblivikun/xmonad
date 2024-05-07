@@ -1,4 +1,5 @@
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
+
+{-# OPTIONS_GHC -Wno-name-shadowing -O2 #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 import           Control.Monad                       (unless, when, void)
 import           Data.Bits                           (testBit)
@@ -11,11 +12,83 @@ import           Graphics.X11.ExtraTypes.XF86
 import           Graphics.X11.Xinerama               (getScreenInfo)
 import           Prelude                             hiding (log)
 import           System.Exit
-import           XMonad
+import XMonad
+    ( (.|.),
+      KeySym,
+      Rectangle(rect_height, rect_x, rect_width, rect_y),
+      button1,
+      button2,
+      button3,
+      button4,
+      button5,
+      mod4Mask,
+      pointerMotionMask,
+      shiftMask,
+      xK_1,
+      xK_9,
+      queryPointer,
+      asks,
+      gets,
+      modify,
+      io,
+      spawn,
+      whenX,
+      withWindowSet,
+      (|||),
+      xmonad,
+      (-->),
+      (<+>),
+      (<||>),
+      (=?),
+      appName,
+      className,
+      composeAll,
+      doIgnore,
+      doShift,
+      resource,
+      title,
+      focus,
+      kill,
+      mouseMoveWindow,
+      screenWorkspace,
+      sendMessage,
+      windows,
+      withFocused,
+      Button,
+      KeyMask,
+      Window,
+      Event(MotionEvent, ev_y, ev_x),
+      MonadIO(liftIO),
+      Default(def),
+      MonadState(get),
+      ExtensionClass(initialValue),
+      Layout,
+      ManageHook,
+      Query,
+      ScreenDetail(screenRect),
+      ScreenId(..),
+      WindowSpace,
+      WorkspaceId,
+      X,
+      XConf(theRoot, display),
+      XConfig(XConfig, handleEventHook, focusFollowsMouse,
+              clickJustFocuses, borderWidth, modMask, normalBorderColor,
+              focusedBorderColor, terminal, keys, workspaces, mouseBindings,
+              layoutHook, manageHook, startupHook, rootMask, logHook),
+      XState(windowset),
+      ChangeLayout(NextLayout),
+      IncMasterN(IncMasterN),
+      Resize(Expand, Shrink) )
 import qualified XMonad.StackSet                     as W
 
-import           XMonad.Hooks.DynamicLog
-import           XMonad.Hooks.EwmhDesktops
+import XMonad.Hooks.DynamicLog
+    ( dynamicLog,
+      filterOutWsPP,
+      xmobarColor,
+      PP(ppExtras, ppSep, ppWsSep, ppCurrent, ppVisible,
+         ppVisibleNoWindows, ppHidden, ppHiddenNoWindows, ppUrgent,
+         ppOrder) )
+import XMonad.Hooks.EwmhDesktops ( ewmh, ewmhFullscreen )
 import           XMonad.Hooks.InsertPosition         (Focus (Newer),
                                                       Position (End, Master),
                                                       insertPosition)
@@ -24,12 +97,13 @@ import           XMonad.Hooks.ManageHelpers          (doCenterFloat, doSink,
                                                       isDialog)
 -- import           XMonad.Hooks.OnPropertyChange
 import           XMonad.Hooks.RefocusLast            (isFloat)
-import           XMonad.Hooks.StatusBar
+import XMonad.Hooks.StatusBar
+    ( StatusBarConfig, dynamicSBs, statusBarPropTo )
 import           XMonad.Hooks.WindowSwallowing
 
 import           XMonad.Layout.Decoration            (ModifiedLayout)
 import           XMonad.Layout.DraggingVisualizer    (draggingVisualizer)
-import           XMonad.Layout.Dwindle
+import XMonad.Layout.BinarySpacePartition ( emptyBSP )
 import           XMonad.Layout.HintedGrid
 import           XMonad.Layout.IndependentScreens
 import           XMonad.Layout.MouseResizableTile
@@ -43,14 +117,20 @@ import           XMonad.Layout.Renamed
 import           XMonad.Layout.SimpleFloat
 import           XMonad.Layout.Spacing               (Border (Border), Spacing,
                                                       spacingRaw)
-import           XMonad.Layout.Tabbed
+import XMonad.Layout.Tabbed
+    ( def,
+      Theme(decoHeight, fontName, activeColor, inactiveColor,
+            activeBorderColor, inactiveBorderColor, activeTextColor,
+            inactiveTextColor),
+      tabbed )
 
-import           Data.List
+import Data.List ( find )
 import qualified Data.List                           as L
-import           XMonad.Actions.CycleWS
+import XMonad.Actions.CycleWS
+    ( moveTo, screenBy, shiftNextScreen, WSType(WSIs) )
 import qualified XMonad.Actions.FlexibleResize       as Flex
 import           XMonad.Actions.OnScreen             (onlyOnScreen)
-import           XMonad.Actions.TiledWindowDragging
+import XMonad.Actions.TiledWindowDragging ( dragWindow )
 import           XMonad.Actions.UpdatePointer        (updatePointer)
 import           XMonad.Actions.Warp                 (warpToScreen)
 import           XMonad.Hooks.RefocusLast            (refocusLastLogHook)
@@ -61,10 +141,27 @@ import           XMonad.Util.Loggers                 (logLayoutOnScreen,
                                                       logTitleOnScreen,
                                                       shortenL, wrapL,
                                                       xmobarColorL)
-import           XMonad.Util.NamedScratchpad
+import XMonad.Util.NamedScratchpad
+    ( customFloating,
+      defaultFloating,
+      namedScratchpadAction,
+      namedScratchpadManageHook,
+      nsHideOnFocusLoss,
+      scratchpadWorkspaceTag,
+      NamedScratchpad(NS) )
+import XMonad.Layout.Gaps ( GapMessage(ToggleGaps) )
 import Data.Time
+    ( getZonedTime,
+      LocalTime(localTimeOfDay),
+      TimeOfDay(TimeOfDay),
+      ZonedTime(zonedTimeToLocalTime) )
 import Data.Time.LocalTime
+    ( getZonedTime,
+      LocalTime(localTimeOfDay),
+      TimeOfDay(TimeOfDay),
+      ZonedTime(zonedTimeToLocalTime) )
 import Control.Concurrent (forkIO, threadDelay) -- Add this line
+import XMonad.Layout.Dwindle ( Chirality(CW), Dwindle(Spiral) )
 import Control.Monad (forever) -- Add this line
 myTerminal, myTerminalClass :: [Char]
 myTerminal = "termonad"
@@ -79,7 +176,7 @@ cyan   = "#8BABF0"
 orange = "#C45500"
 
 myWorkspaces :: [[Char]]
-myWorkspaces = ["  1  ", "2  ", "3  ", "4  ", "5  ", "6  ", "7  ", "8  ", "9  "]
+myWorkspaces = [" 1  ", "2  ", "3  ", "4  ", "5  ", "6  ", "7  ", "8  ", "9  "]
 
 
 trayerRestartCommand :: [Char]
@@ -104,10 +201,9 @@ myScratchPads =
     NS "terminal" "st" (title =? "scratch") (customFloating $ W.RationalRect 0.17 0.15 0.7 0.7)
   , NS "simplecolorpicker" "simplecolorpicker" (className =? "simplecolorpicker") defaultFloating
   , NS "galculator" "galculator" (className =? "Galculator") (customFloating $ W.RationalRect 0.58 0.48 0.2 0.4)
-  , NS "btop" (myTerminal ++ " --title btop -e btop") (title =? "btop") (customFloating $ W.RationalRect 0.17 0.15 0.7 0.7)
+  , NS "btop" ("urxvt" ++ " --title btop -e btop") (title =? "btop") (customFloating $ W.RationalRect 0.17 0.15 0.7 0.7)
   , NS "xclicker" "xclicker" (className =? "xclicker") (customFloating $ W.RationalRect 0.435 0.05 0.13 0.21)
   , NS "brightness" "brightness-controller" (title =? "Brightness Controller") defaultFloating
-  , NS "discord" "discord" (className =? "Discord") (customFloating $ W.RationalRect 0.17 0.15 0.7 0.7)
   , NS "simplenote" "simplenote --no-sandbox" (className =? "Simplenote") (customFloating $ W.RationalRect 0.76 0.06 0.23 0.91)
   ]
 
@@ -128,25 +224,25 @@ myAditionalKeys =
    --volume
     -- apps
   [ ("M-<Return>", spawn myTerminal)
-  ,  ("<XF86AudioRaiseVolume>", spawn "pamixer --increase 5")
-            , ("<XF86AudioLowerVolume>", spawn "pamixer --decrease 5")
+  ,  ("<XF86AudioRaiseVolume>", spawn "sh ~/.config/hypr/scripts/Volume.sh --inc")
+            , ("<XF86AudioLowerVolume>", spawn "sh ~/.config/hypr/scripts/Volume.sh --dec")
             , ("<XF86AudioMute>", spawn "pamixer --toggle-mute")
             , ("<XF86AudioMicMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh  --toggle-mic")
 --bright
 
   , ("<XF86MonBrightnessUp>", spawn "lux -a 10%")
   , ("<XF86MonBrightnessDown>", spawn "lux -s 10%") 
-
+  ,("M1-<Tab>", spawnRofiWindow)
   , ("M-v", spawn $ myTerminal ++ " --title Nvim -e nvim")
   , ("M-f", spawn $ myTerminal ++ " --title Ranger -e ranger")
-  , ("M-d", spawn "rofi -show drun windowcd")
+  ,("M-d", spawnDynamicRofiTheme)
   , ("M-p", spawn "passmenu -p pass")
   , ("M-w", spawn "librewolf")
   , ("M-S-w", spawn "librewolf --private-window")
   , ("M-S-t", spawn trayerRestartCommand)
   , ("<Print>", spawn "flameshot gui")
-  , ("M-e", spawn $ myTerminal ++ " --title Nvim -e nvim")
-  --  , ("M-e", spawn "emacsclient -c -a 'emacs'")
+--  , ("M-e", spawn $ myTerminal ++ " --title Nvim -e nvim")
+   , ("M-e", spawn "emacsclient -c -a 'emacs'")
   , ("M-q", kill)
 
   -- scratchpads
@@ -154,7 +250,6 @@ myAditionalKeys =
   , ("M-y", namedScratchpadAction myScratchPads "btop")
   , ("M-r", namedScratchpadAction myScratchPads "xclicker")
   , ("M-b", namedScratchpadAction myScratchPads "brightness")
-  , ("M-S-c", namedScratchpadAction myScratchPads "discord")
   , ("M-S-<Return>", namedScratchpadAction myScratchPads "terminal")
   -- spotify controls
   , ("M-<F9>", spawn "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.spotify /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause")
@@ -200,6 +295,7 @@ myAditionalKeys =
   , ("M-S-q", io exitSuccess)
   , ("M-S-r", spawn "killall xmobar; xmonad --recompile; xmonad --restart")
   , ("M-b", spawn "xmobar")
+  , ("M-g", sendMessage $ ToggleGaps)
   ]
 
 
@@ -241,16 +337,27 @@ isDayTime = do
 isNight :: TimeOfDay -> Bool
 isNight time = time >= TimeOfDay 20 0 0 || time < TimeOfDay 9 0 0
 
+spawnDynamicRofiTheme :: X ()
+spawnDynamicRofiTheme = do
+ isDay <- io isDayTime
+ when isDay $ spawn "rofi -theme ~/.config/rofi/config-light.rasi -show run"
+ when (not isDay) $ spawn "rofi -theme ~/.config/rofi/config-dark.rasi -show run"
 
+spawnRofiWindow :: X ()
+spawnRofiWindow = do
+ isDay <- io isDayTime
+ when isDay $ spawn "rofi -theme ~/.config/rofi/config-light.rasi -show window"
+ when (not isDay) $ spawn "rofi -theme ~/.config/rofi/config-dark.rasi -show window"
 mySpacing :: Integer -> Integer -> l a -> ModifiedLayout Spacing l a
 mySpacing i j = spacingRaw False (Border i i i i) True (Border j j j j) True
 
-myLayoutHook = avoidStruts $ onWorkspaces ["0_9", "1_9"] layoutGrid $ layoutTall ||| layoutTabbed ||| layoutFloat
-  where
-    layoutTall = mkToggle (NBFULL ?? EOT) . renamed [Replace "tall"] $ draggingVisualizer $ smartBorders $ mySpacing 15 7 $ mouseResizableTile { masterFrac = 0.65, draggerType = FixedDragger 0 30}
-    layoutGrid = mkToggle (NBFULL ?? EOT) . renamed [Replace "grid"] $ draggingVisualizer $ smartBorders $ mySpacing 15 7 $ Grid False
+myLayoutHook = avoidStruts $ onWorkspaces ["0_9", "1_9"] (mySpacing 4 2 emptyBSP) $ layoutTall ||| layoutTabbed ||| layoutFloat ||| layoutGrid ||| (mySpacing 4 2  $ Spiral L CW 1.5 1.1)
+ where
+    layoutTall = mkToggle (NBFULL ?? EOT) . renamed [Replace "tall"] $ draggingVisualizer $ smartBorders $ mySpacing 4 2 $ mouseResizableTile { masterFrac = 0.65, draggerType = FixedDragger 0 30}
+    layoutGrid = mkToggle (NBFULL ?? EOT) . renamed [Replace "grid"] $ draggingVisualizer $ smartBorders $ mySpacing 4 2 $ Grid False
     layoutFloat = mkToggle (NBFULL ?? EOT) . renamed [Replace "float"] $ simpleFloat
     layoutTabbed = mkToggle (NBFULL ?? EOT) . renamed [Replace "full"] $ smartBorders $ mySpacing 15 7 $ tabbed shrinkText myTabTheme
+
     myTabTheme = def
       { fontName            = "xft:Roboto:size=12:bold"
       , activeColor         = grey1
@@ -261,8 +368,7 @@ myLayoutHook = avoidStruts $ onWorkspaces ["0_9", "1_9"] layoutGrid $ layoutTall
       , inactiveTextColor   = grey3
       , decoHeight          = 25
       }
-
-------------------------------------------------------------------------
+--------------------------------------------------------
 
 (~?) :: Eq a => Query [a] -> [a] -> Query Bool
 q ~? x = fmap (x `L.isInfixOf`) q
@@ -281,17 +387,19 @@ myManageHook = composeAll
   , appName =? "blueman-manager" --> doCenterFloat
   , appName =? "pavucontrol" --> doCenterFloat
   , appName =? "nwg-look" --> doCenterFloat
+  , appName =? "Vivaldi" --> doShift "1"
+  , className =? "discord" --> doShift (workspaceAt 8)
   , title =? myTerminalClass --> insertPosition End Newer
   , insertPosition Master Newer
   ] <+> manageDocks <+> namedScratchpadManageHook myScratchPads
 
 ------------------------------------------------------------------------
 
-myHandleEventHook :: Event -> X All
-myHandleEventHook = multiScreenFocusHook
-                 -- <+> swallowEventHook (className =? myTerminalClass) (return True)
-                --  <+> dynamicPropertyChange "WM_NAME" (title =? "Spotify" --> doShift "1_8")
+myHandleEventHook = swallowEventHook (className =? "termonad-linux-x86_64" <||> className =? "Termite") (return True)
 
+workspaceAt :: Int -> String
+workspaceAt 0 = last myWorkspaces
+workspaceAt n = ((myWorkspaces !!) . pred) n
 ------------------------------------------------------------------------
 restartXMonad :: IO ()
 restartXMonad = spawn "killall xmobar && xmonad --restart"
@@ -299,14 +407,14 @@ periodicTasks :: X ()
 periodicTasks = do
  liftIO $ void $ forkIO $ forever $ do
     changeWallpaper
-    threadDelay (10 * 10 * 1000000) -- Wait for 1 hour
+    threadDelay (10 * 10 * 3000000) -- Wait for 1 hour
     restartXMonad
 changeWallpaper :: IO ()
 changeWallpaper = do
  isDay <- isDayTime
  if isDay
-    then spawn "feh --bg-scale ~/Pictures/day_wall.jpg"
-    else spawn "feh --bg-scale ~/Pictures/night.webp"
+    then spawn "feh --bg-fill ~/Pictures/day_wall.png"
+    else spawn "feh --bg-scale ~/Pictures/night.jpg"
 
 myStartupHook :: X ()
 myStartupHook = do
@@ -384,7 +492,7 @@ myStatusBarSpawner (S s) = do
  isDay <- isDayTime
  colorScheme <- return $ getColorScheme isDay
  let statusBarConfig = statusBarPropTo ("_XMONAD_LOG_" ++ show s)
-                                        ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ (if isDay then "0" else "1") ++ ".hs")
+                                        ("xmobar -x " ++ show s ++ " ~/.xmonad/xmobar" ++ (if isDay then "day" else "night") ++ ".hs")
                                         (return $ myXmobarPP (S s) colorScheme)
  return statusBarConfig
 myXmobarPP :: ScreenId -> (String, String, String) -> PP
@@ -435,12 +543,13 @@ main = xmonad
         , workspaces         = withScreens 2 myWorkspaces
         , mouseBindings      = myMouseBindings
         , layoutHook         = myLayoutHook
-        , manageHook         = myManageHook
+       
+        , manageHook         = manageDocks <+> myManageHook
         , startupHook        = myStartupHook
 
         , rootMask = rootMask def .|. pointerMotionMask
         , logHook            = dynamicLog
                             >> refocusLastLogHook
                             >> nsHideOnFocusLoss myScratchPads
-        , handleEventHook    = myHandleEventHook
+        , handleEventHook    = swallowEventHook (className =? "termonad" <||> className =? "Termite") (return True)
         } `additionalKeysP` myAditionalKeys

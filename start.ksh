@@ -41,7 +41,7 @@ fi
 if [ -z "$(pgrep insync)" ] ; then
     insync start &
 fi
-pulseaudio -D
+#pulseaudio -D
 
 stty sane & 
 xbindkeys &
