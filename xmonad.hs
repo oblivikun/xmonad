@@ -224,14 +224,15 @@ myAditionalKeys =
    --volume
     -- apps
   [ ("M-<Return>", spawn myTerminal)
-  ,  ("<XF86AudioRaiseVolume>", spawn "sh ~/.config/hypr/scripts/Volume.sh --inc")
-            , ("<XF86AudioLowerVolume>", spawn "sh ~/.config/hypr/scripts/Volume.sh --dec")
+  ,  ("<XF86AudioRaiseVolume>", spawn "/home/erel/.config/hypr/scripts/Volume.sh --inc")
+            , ("<XF86AudioLowerVolume>", spawn "/home/erel/.config/hypr/scripts/Volume.sh --dec")
             , ("<XF86AudioMute>", spawn "pamixer --toggle-mute")
             , ("<XF86AudioMicMute>", spawn "sh /home/erel/.config/hypr/scripts/Volume.sh  --toggle-mic")
 --bright
-
-  , ("<XF86MonBrightnessUp>", spawn "lux -a 10%")
-  , ("<XF86MonBrightnessDown>", spawn "lux -s 10%") 
+ --, ("<XF86MonBrightnessUp>", spawn "bash brightnessctl set 10%+")
+ --, ("<XF86MonBrightnessDown>", spawn " bash brightnessctl set 10%-")
+  , ("<XF86MonBrightnessUp>", spawn "brightnessctl set 10%+")
+  , ("<XF86MonBrightnessDown>", spawn "brightnessctl set 10%-") 
   ,("M1-<Tab>", spawnRofiWindow)
   , ("M-v", spawn $ myTerminal ++ " --title Nvim -e nvim")
   , ("M-f", spawn $ myTerminal ++ " --title Ranger -e ranger")
@@ -413,12 +414,12 @@ changeWallpaper :: IO ()
 changeWallpaper = do
  isDay <- isDayTime
  if isDay
-    then spawn "feh --bg-fill ~/Pictures/day_wall.png"
-    else spawn "feh --bg-scale ~/Pictures/night.jpg"
+    then spawn "feh --bg-fill ~/Pictures/daywal.jpeg"
+    else spawn "feh --bg-scale ~/Pictures/nightwal.jpg"
 
 myStartupHook :: X ()
 myStartupHook = do
-    spawn "ksh /home/erel/.xmonad/start.ksh"
+    spawn "/home/erel/.xmonad/start.ksh"
     spawn trayerRestartCommand
     spawn "xsetroot -cursor_name left_ptr &"
     spawn "setxkbmap us"
@@ -521,7 +522,7 @@ myXmobarPP s (grey2, grey4, orange) = filterOutWsPP [scratchpadWorkspaceTag] . m
       if n == c then xmobarColorL grey2 "" l else xmobarColorL grey3 "" l
     layoutColorIsActive n l = do
       c <- withWindowSet $ return . W.screen . W.current
-      if n == c then wrapL "<icon=/home/erel/.xmonad/icons" "_selected.xpm/>" l else wrapL "<icon=/home/erel/.xmonad/icons/" ".xpm/>" l
+      if n == c then wrapL "<icon=/etc/nixos/xmonad/icons" "_selected.xpm/>" l else wrapL "<icon=/etc/nixos/xmonad//icons/" ".xpm/>"l 
 
 ------------------------------------------------------------------------
 
